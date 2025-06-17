@@ -3,7 +3,6 @@ const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 const dotenv = require("dotenv");
-const path = require("path");
 const { v4: uuidv4 } = require("uuid");
 const axios = require("axios");
 const pool = require("./db.js");
@@ -16,7 +15,6 @@ const server = http.createServer(app);
 const allowedOrigins = [
     "https://radioinear.vercel.app",
     "http://localhost:3000",
-    "radioinear.vercel.app",
     "https://radioclient-gacetihnu-linear-80e9e17cvercel.app",
     "https://radiobackend-iss7.onrender.com",
 ];
@@ -28,6 +26,7 @@ app.use(
             if (!origin || allowedOrigins.includes(origin)) {
                 callback(null, true);
             } else {
+                console.error(`Blocked by CORS: ${origin}`);
                 callback(new Error("Not allowed by CORS"));
             }
         },
@@ -37,6 +36,8 @@ app.use(
         credentials: true,
     })
 );
+
+// Тестовые эндпоинты
 app.get("/", (req, res) => {
     res.send("🎧 Радио-сервер запущен и работает");
 });
@@ -52,10 +53,19 @@ app.get("/api/ping", (req, res) => {
 
 app.get("/api/db-check", async (req, res) => {
     try {
-        const result = await pool.query("SELECT NOW()");
-        res.json({ db: "connected", time: result.rows[0].now });
+        const result = await pool.query("SELECT NOW() as current_time");
+        res.json({
+            status: "success",
+            db: "connected",
+            time: result.rows[0].current_time,
+        });
     } catch (err) {
-        res.status(500).json({ db: "error", error: err.message });
+        console.error("Database check error:", err);
+        res.status(500).json({
+            status: "error",
+            message: "Database connection failed",
+            error: err.message,
+        });
     }
 });
 
@@ -66,12 +76,13 @@ const io = new Server(server, {
         methods: ["GET", "POST"],
         credentials: true,
     },
-    transports: ["websocket", "polling"],
+    transports: ["websocket"],
 });
 
 app.use(express.json());
 app.use("/api", require("./routes/apiRoute.js"));
-// Изменяем структуру для раздельных очередей и позиций
+
+// Инициализация структур данных
 const queues = {
     rock: { youtube: [], rutube: [] },
     hiphop: { youtube: [], rutube: [] },
@@ -81,14 +92,12 @@ const queues = {
 let pendingRequests = [];
 global.userNotifications = [];
 
-// Изменяем структуру для раздельных текущих треков
 const currentTracks = {
     rock: { youtube: null, rutube: null },
     hiphop: { youtube: null, rutube: null },
     electronic: { youtube: null, rutube: null },
 };
 
-// Добавляем состояние текущей платформы для каждого жанра
 const currentPlatforms = {
     rock: "youtube",
     hiphop: "youtube",
@@ -105,7 +114,6 @@ function isTrackPlaying(t) {
     return (Date.now() - t.startedAt) / 1000 < t.durationSec;
 }
 
-// Изменяем функцию для запуска следующего трека с учетом платформы
 function startNextTrack(genre, platform) {
     const queueForPlatform = queues[genre][platform];
 
@@ -243,9 +251,9 @@ io.on("connection", (socket) => {
             // Сохраняем в БД
             await pool.query(
                 `INSERT INTO requests
-            (id, genre, track, username, message, title, status,
-            duration_sec, timestamp, started_at, user_id, platform)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        (id, genre, track, username, message, title, status,
+        duration_sec, timestamp, started_at, user_id, platform)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
                 [
                     enriched.id,
                     genre,
@@ -301,5 +309,17 @@ io.on("connection", (socket) => {
     socket.on("disconnect", () => console.log("❌ Клиент отключён"));
 });
 
-const PORT = process.env.PORT || 10000; // Render требует порт >= 10000
-server.listen(PORT, "0.0.0.0", () => console.log(`🚀 Сервер на ${PORT}`));
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Сервер запущен на порту ${PORT}`);
+    console.log("Разрешенные домены:", allowedOrigins);
+});
+
+// Обработка необработанных ошибок
+process.on("uncaughtException", (err) => {
+    console.error("Необработанная ошибка:", err);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+    console.error("Необработанный rejection:", promise, "причина:", reason);
+});
