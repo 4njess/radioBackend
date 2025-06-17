@@ -36,7 +36,9 @@ app.use(
         credentials: true,
     })
 );
-
+app.get("/", (req, res) => {
+    res.send("🎧 Радио-сервер запущен и работает");
+});
 // Настройка Socket.IO
 const io = new Server(server, {
     cors: {
