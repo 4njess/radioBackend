@@ -15,6 +15,8 @@ const server = http.createServer(app);
 // Разрешенные домены
 const allowedOrigins = [
     "http://localhost:3000",
+    "https://radioinear.vercel.app",
+    "https://radioclient-gacetihnu-linear-80e9e17cvercel.app",
     "https://radiobackend-iss7.onrender.com", 
 ];
 
