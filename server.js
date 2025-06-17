@@ -14,10 +14,11 @@ const server = http.createServer(app);
 
 // Разрешенные домены
 const allowedOrigins = [
-    "http://localhost:3000",
     "https://radioinear.vercel.app",
+    "http://localhost:3000",
+    "radioinear.vercel.app",
     "https://radioclient-gacetihnu-linear-80e9e17cvercel.app",
-    "https://radiobackend-iss7.onrender.com", 
+    "https://radiobackend-iss7.onrender.com",
 ];
 
 // Настройка CORS
@@ -39,6 +40,25 @@ app.use(
 app.get("/", (req, res) => {
     res.send("🎧 Радио-сервер запущен и работает");
 });
+
+app.get("/api/ping", (req, res) => {
+    res.json({
+        status: "ok",
+        time: new Date(),
+        environment: process.env.NODE_ENV,
+        node: process.version,
+    });
+});
+
+app.get("/api/db-check", async (req, res) => {
+    try {
+        const result = await pool.query("SELECT NOW()");
+        res.json({ db: "connected", time: result.rows[0].now });
+    } catch (err) {
+        res.status(500).json({ db: "error", error: err.message });
+    }
+});
+
 // Настройка Socket.IO
 const io = new Server(server, {
     cors: {
@@ -282,4 +302,4 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 10000; // Render требует порт >= 10000
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Сервер на ${PORT}`)); 
+server.listen(PORT, "0.0.0.0", () => console.log(`🚀 Сервер на ${PORT}`));
