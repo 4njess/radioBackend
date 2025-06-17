@@ -281,5 +281,5 @@ io.on("connection", (socket) => {
     socket.on("disconnect", () => console.log("❌ Клиент отключён"));
 });
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`🚀 Сервер на ${PORT}`));
+const PORT = process.env.PORT || 10000; // Render требует порт >= 10000
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Сервер на ${PORT}`)); 
