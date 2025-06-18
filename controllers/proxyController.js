@@ -1,3 +1,4 @@
+//proxyController.js
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
@@ -42,7 +43,7 @@ const proxyStream = async (req, res) => {
             });
 
             const baseUrl = new URL(streamUrl);
-            const proxyUrl = "${process.env.REACT_APP_API_URL}/api/proxy?url=";
+            const proxyUrl = `${process.env.REACT_APP_API_URL}/api/proxy?url=`;
 
             // Обрабатываем все ссылки в плейлисте
             const processedPlaylist = response.data
