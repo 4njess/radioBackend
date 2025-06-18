@@ -67,4 +67,4 @@ const rtSearch = async (req, res) => {
     }
 };
 
-module.exports = { rtSearch, getRtStream};
+module.exports = {rtSearch, getRtStream};

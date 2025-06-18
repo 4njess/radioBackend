@@ -1,8 +1,6 @@
-//server.js
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
-const cors = require("cors");
 const dotenv = require("dotenv");
 const { v4: uuidv4 } = require("uuid");
 const axios = require("axios");
@@ -20,24 +18,33 @@ const allowedOrigins = [
     "https://radiobackend-iss7.onrender.com",
 ];
 
+// Логирование запросов для диагностики
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} | Origin: ${req.headers.origin}`);
+    next();
+});
 
-// Настройка CORS
-app.use(
-    cors({
-        origin: function (origin, callback) {
-            if (!origin || allowedOrigins.includes(origin)) {
-                callback(null, true);
-            } else {
-                console.error(`Blocked by CORS: ${origin}`);
-                callback(new Error("Not allowed by CORS"));
-            }
-        },
-        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization", "Range"],
-        exposedHeaders: ["Content-Length", "Content-Range"],
-        credentials: true,
-    })
-);
+
+
+// Основной CORS middleware
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    
+    if (allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Range');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+    
+    // Обработка preflight запросов
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+    }
+    
+    next();
+});
 
 // Тестовые эндпоинты
 app.get("/", (req, res) => {
