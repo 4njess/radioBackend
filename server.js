@@ -51,24 +51,6 @@ app.get("/api/ping", (req, res) => {
     });
 });
 
-app.get("/api/db-check", async (req, res) => {
-    try {
-        const result = await pool.query("SELECT NOW() as current_time");
-        res.json({
-            status: "success",
-            db: "connected",
-            time: result.rows[0].current_time,
-        });
-    } catch (err) {
-        console.error("Database check error:", err);
-        res.status(500).json({
-            status: "error",
-            message: "Database connection failed",
-            error: err.message,
-        });
-    }
-});
-
 // Настройка Socket.IO
 const io = new Server(server, {
     cors: {
