@@ -20,12 +20,12 @@ router.get('/users', getAllUsers);
 router.put('/users/:id', updateUser);
 router.delete('/users/:id', deleteUser);
 router.get('/notifications/:id', notifications)
-router.post('/search/rutube', rtSearch)
-router.get("/rutube/stream/:videoId", getRtStream);
 router.post('/search', ytSearch)
-router.get('/proxy', proxyStream)
 
-// ✅ Аватарка
+router.get('/proxy', proxyStream)
+router.get("/rutube/stream/:videoId", getRtStream);
+router.post('/search/rutube', rtSearch)
+
 router.post('/users/:id/avatar', upload.single('avatar'), uploadAvatar);
 router.get('/users/:id/avatar', getAvatar);
 

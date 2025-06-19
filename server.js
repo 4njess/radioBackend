@@ -21,29 +21,40 @@ const allowedOrigins = [
 
 // Логирование запросов для диагностики
 app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} | Origin: ${req.headers.origin}`);
+    console.log(
+        `[${new Date().toISOString()}] ${req.method} ${req.url} | Origin: ${
+            req.headers.origin
+        }`
+    );
     next();
 });
-
-
 
 // Основной CORS middleware
 app.use((req, res, next) => {
     const origin = req.headers.origin;
-    
+
     if (allowedOrigins.includes(origin)) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Range');
-        res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader(
+            "Access-Control-Allow-Methods",
+            "GET, POST, PUT, DELETE, OPTIONS"
+        );
+        res.setHeader(
+            "Access-Control-Allow-Headers",
+            "Content-Type, Authorization, Range"
+        );
+        res.setHeader(
+            "Access-Control-Expose-Headers",
+            "Content-Length, Content-Range"
+        );
+        res.setHeader("Access-Control-Allow-Credentials", "true");
     }
-    
+
     // Обработка preflight запросов
-    if (req.method === 'OPTIONS') {
+    if (req.method === "OPTIONS") {
         return res.sendStatus(204);
     }
-    
+
     next();
 });
 
@@ -123,6 +134,30 @@ function startNextTrack(genre, platform) {
 
     setTimeout(() => startNextTrack(genre, platform), next.durationSec * 1000);
 }
+app.get("/health/routes", (req, res) => {
+    const routes = [];
+    app._router.stack.forEach((middleware) => {
+        if (middleware.route) {
+            // прямые маршруты (route)
+            const methods = Object.keys(middleware.route.methods)
+                .map((m) => m.toUpperCase())
+                .join(",");
+            routes.push(`${methods} ${middleware.route.path}`);
+        } else if (middleware.name === "router") {
+            // маршруты внутри роутеров
+            middleware.handle.stack.forEach((handler) => {
+                const route = handler.route;
+                if (route) {
+                    const methods = Object.keys(route.methods)
+                        .map((m) => m.toUpperCase())
+                        .join(",");
+                    routes.push(`${methods} /api${route.path}`);
+                }
+            });
+        }
+    });
+    res.json({ routes });
+});
 
 io.on("connection", (socket) => {
     console.log("🔌 Новый клиент");
