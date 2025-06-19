@@ -63,6 +63,29 @@ app.get("/", (req, res) => {
     res.send("🎧 Радио-сервер запущен и работает");
 });
 
+app.get("/api/ping", (req, res) => {
+    res.json({
+        status: "ok",
+        time: new Date(),
+        environment: process.env.NODE_ENV,
+        node: process.version,
+    });
+});
+
+// Настройка Socket.IO
+const io = new Server(server, {
+    cors: {
+        origin: allowedOrigins,
+        methods: ["GET", "POST"],
+        credentials: true,
+    },
+    transports: ["websocket"],
+});
+
+app.use(express.json());
+app.use("/api", require("./routes/apiRoute.js"));
+
+
 app.get("/health/routes", (req, res) => {
     const routes = [];
     app._router.stack.forEach((middleware) => {
@@ -88,27 +111,7 @@ app.get("/health/routes", (req, res) => {
     res.json({ routes });
 });
 
-app.get("/api/ping", (req, res) => {
-    res.json({
-        status: "ok",
-        time: new Date(),
-        environment: process.env.NODE_ENV,
-        node: process.version,
-    });
-});
 
-// Настройка Socket.IO
-const io = new Server(server, {
-    cors: {
-        origin: allowedOrigins,
-        methods: ["GET", "POST"],
-        credentials: true,
-    },
-    transports: ["websocket"],
-});
-
-app.use(express.json());
-app.use("/api", require("./routes/apiRoute.js"));
 
 // Инициализация структур данных
 const queues = {
