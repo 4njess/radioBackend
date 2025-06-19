@@ -63,6 +63,31 @@ app.get("/", (req, res) => {
     res.send("🎧 Радио-сервер запущен и работает");
 });
 
+app.get("/health/routes", (req, res) => {
+    const routes = [];
+    app._router.stack.forEach((middleware) => {
+        if (middleware.route) {
+            // прямые маршруты (route)
+            const methods = Object.keys(middleware.route.methods)
+                .map((m) => m.toUpperCase())
+                .join(",");
+            routes.push(`${methods} ${middleware.route.path}`);
+        } else if (middleware.name === "router") {
+            // маршруты внутри роутеров
+            middleware.handle.stack.forEach((handler) => {
+                const route = handler.route;
+                if (route) {
+                    const methods = Object.keys(route.methods)
+                        .map((m) => m.toUpperCase())
+                        .join(",");
+                    routes.push(`${methods} /api${route.path}`);
+                }
+            });
+        }
+    });
+    res.json({ routes });
+});
+
 app.get("/api/ping", (req, res) => {
     res.json({
         status: "ok",
@@ -134,30 +159,7 @@ function startNextTrack(genre, platform) {
 
     setTimeout(() => startNextTrack(genre, platform), next.durationSec * 1000);
 }
-app.get("/health/routes", (req, res) => {
-    const routes = [];
-    app._router.stack.forEach((middleware) => {
-        if (middleware.route) {
-            // прямые маршруты (route)
-            const methods = Object.keys(middleware.route.methods)
-                .map((m) => m.toUpperCase())
-                .join(",");
-            routes.push(`${methods} ${middleware.route.path}`);
-        } else if (middleware.name === "router") {
-            // маршруты внутри роутеров
-            middleware.handle.stack.forEach((handler) => {
-                const route = handler.route;
-                if (route) {
-                    const methods = Object.keys(route.methods)
-                        .map((m) => m.toUpperCase())
-                        .join(",");
-                    routes.push(`${methods} /api${route.path}`);
-                }
-            });
-        }
-    });
-    res.json({ routes });
-});
+
 
 io.on("connection", (socket) => {
     console.log("🔌 Новый клиент");
