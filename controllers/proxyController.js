@@ -9,7 +9,7 @@ const proxyStream = async (req, res) => {
     if (!streamUrl) return res.status(400).send("No URL provided");
 
     // Декодируем URL, если он был вложенным прокси
-    if (streamUrl.includes(`${process.env.REACT_APP_API_URL}/api/proxy`)) {
+    if (streamUrl.includes(`${process.env.API_BASE_URL}/api/proxy`)) {
         try {
             const urlObj = new URL(streamUrl);
             streamUrl = urlObj.searchParams.get("url");
@@ -43,7 +43,7 @@ const proxyStream = async (req, res) => {
             });
 
             const baseUrl = new URL(streamUrl);
-            const proxyUrl = `${process.env.REACT_APP_API_URL}/api/proxy?url=`;
+            const proxyUrl = `${process.env.API_BASE_URL}/api/proxy?url=`;
 
             // Обрабатываем все ссылки в плейлисте
             const processedPlaylist = response.data
