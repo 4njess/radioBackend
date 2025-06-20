@@ -87,53 +87,30 @@ app.use("/api", require("./routes/apiRoute.js"));
 
 
 app.get("/health/routes", (req, res) => {
-    try {
-        const routes = [];
-        
-        // Проверяем наличие роутера
-        if (!app._router || !app._router.stack) {
-            return res.json({ 
-                status: "error", 
-                message: "Router not initialized",
-                routes: []
+    const routes = [];
+    app._router.stack.forEach((middleware) => {
+        if (middleware.route) {
+            // прямые маршруты (route)
+            const methods = Object.keys(middleware.route.methods)
+                .map((m) => m.toUpperCase())
+                .join(",");
+            routes.push(`${methods} ${middleware.route.path}`);
+        } else if (middleware.name === "router") {
+            // маршруты внутри роутеров
+            middleware.handle.stack.forEach((handler) => {
+                const route = handler.route;
+                if (route) {
+                    const methods = Object.keys(route.methods)
+                        .map((m) => m.toUpperCase())
+                        .join(",");
+                    routes.push(`${methods} /api${route.path}`);
+                }
             });
         }
-
-        app._router.stack.forEach((middleware) => {
-            if (middleware.route) {
-                // Прямые маршруты
-                const methods = Object.keys(middleware.route.methods)
-                    .map((m) => m.toUpperCase())
-                    .join(",");
-                routes.push(`${methods} ${middleware.route.path}`);
-            } else if (middleware.name === "router") {
-                // Маршруты внутри роутеров
-                middleware.handle.stack.forEach((handler) => {
-                    if (handler.route) {
-                        const route = handler.route;
-                        const methods = Object.keys(route.methods)
-                            .map((m) => m.toUpperCase())
-                            .join(",");
-                        routes.push(`${methods} /api${route.path}`);
-                    }
-                });
-            }
-        });
-        
-        res.json({ 
-            status: "success",
-            count: routes.length,
-            routes 
-        });
-    } catch (err) {
-        console.error("Error in /health/routes:", err);
-        res.status(500).json({ 
-            status: "error",
-            message: "Internal server error",
-            error: err.message 
-        });
-    }
+    });
+    res.json({ routes });
 });
+
 
 
 // Инициализация структур данных

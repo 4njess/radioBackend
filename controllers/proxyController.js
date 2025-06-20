@@ -1,22 +1,17 @@
-//proxyController.js
+//proxyController.js(сервер)
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
 const pool = require("../db");
 
 const proxyStream = async (req, res) => {
-    let streamUrl = req.query.url;
+    // читаем Base64‑закодированный URL из параметра `u`
+    const encoded = req.query.u;
+    let streamUrl = encoded
+        ? Buffer.from(encoded, "base64").toString("utf8")
+        : null;
     if (!streamUrl) return res.status(400).send("No URL provided");
 
-    // Декодируем URL, если он был вложенным прокси
-    if (streamUrl.includes(`${process.env.API_BASE_URL}/api/proxy`)) {
-        try {
-            const urlObj = new URL(streamUrl);
-            streamUrl = urlObj.searchParams.get("url");
-        } catch (e) {
-            console.warn("URL unpack error:", e.message);
-        }
-    }
 
     try {
         // Определяем тип контента по расширению
@@ -58,10 +53,10 @@ const proxyStream = async (req, res) => {
                         const segmentUrl = line.startsWith("http")
                             ? new URL(line)
                             : new URL(
-                                line,
-                                baseUrl.origin +
-                                    baseUrl.pathname.replace(/\/[^/]+$/, "/")
-                            );
+                                  line,
+                                  baseUrl.origin +
+                                      baseUrl.pathname.replace(/\/[^/]+$/, "/")
+                              );
 
                         return proxyUrl + encodeURIComponent(segmentUrl.href);
                     } catch (e) {
