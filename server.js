@@ -150,69 +150,6 @@ function isTrackPlaying(t) {
     return (Date.now() - t.startedAt) / 1000 < t.durationSec;
 }
 
-// function startNextTrack(genre, platform) {
-//     const queueForPlatform = queues[genre][platform];
-
-//     if (queueForPlatform.length === 0) {
-//         currentTracks[genre][platform] = null;
-//         io.emit(`now-playing-${genre}-${platform}`, null);
-//         return;
-//     }
-
-//     const next = queueForPlatform.shift();
-//     currentTracks[genre][platform] = { ...next, startedAt: Date.now() };
-
-//     io.emit(`queue-update-${genre}-${platform}`, queueForPlatform);
-//     io.emit(`now-playing-${genre}-${platform}`, currentTracks[genre][platform]);
-
-//     setTimeout(() => startNextTrack(genre, platform), next.durationSec * 1000);
-// }
-
-// Обновляем функцию startNextTrack
-// function startNextTrack(genre, platform) {
-//     if (timers[genre][platform]) {
-//         clearTimeout(timers[genre][platform]);
-//         timers[genre][platform] = null;
-//     }
-
-//     const queueForPlatform = queues[genre][platform];
-
-//     if (queueForPlatform.length === 0) {
-//         currentTracks[genre][platform] = null;
-//         io.emit(`now-playing-${genre}-${platform}`, null);
-//         return;
-//     }
-
-//     const next = queueForPlatform.shift();
-//     const now = Date.now();
-
-//     // Сохраняем предыдущий прогресс
-//     const prevTrack = currentTracks[genre][platform];
-//     let startOffset = 0;
-
-//     if (prevTrack) {
-//         const elapsed = (now - prevTrack.startedAt) / 1000;
-//         if (elapsed < prevTrack.durationSec) {
-//             startOffset = elapsed;
-//         }
-//     }
-
-//     currentTracks[genre][platform] = {
-//         ...next,
-//         startedAt: now - startOffset * 1000
-//     };
-
-//     io.emit(`queue-update-${genre}-${platform}`, queueForPlatform);
-//     io.emit(`now-playing-${genre}-${platform}`, currentTracks[genre][platform]);
-
-//     const remainingTime = next.durationSec * 1000 - startOffset * 1000;
-
-//     timers[genre][platform] = setTimeout(
-//         () => startNextTrack(genre, platform),
-//         remainingTime
-//     );
-// }
-
 function startNextTrack(genre, platform) {
     if (timers[genre][platform]) {
         clearTimeout(timers[genre][platform]);
@@ -413,7 +350,6 @@ io.on("connection", (socket) => {
         const id = uuidv4();
         const timestamp = new Date();
 
-        // 1. Записываем в память
         pendingRequests.push({
             ...request,
             id,
@@ -423,7 +359,6 @@ io.on("connection", (socket) => {
             timestamp,
         });
 
-        // 2. Сразу сохраняем в БД
         await pool.query(
             `INSERT INTO requests
         (id, genre, track, username, message, title, status, timestamp, user_id, platform)
@@ -581,24 +516,12 @@ io.on("connection", (socket) => {
 
             // Сохраняем в БД
             await pool.query(
-                `INSERT INTO requests
-        (id, genre, track, username, message, title, status,
-        duration_sec, timestamp, started_at, user_id, platform)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-                [
-                    enriched.id,
-                    genre,
-                    track,
-                    username,
-                    message,
-                    title,
-                    "approved",
-                    enriched.durationSec,
-                    new Date(),
-                    new Date(),
-                    userId,
-                    platform,
-                ]
+                `UPDATE requests
+                SET status = 'approved',
+                    duration_sec = $1,
+                    started_at   = $2
+                WHERE id = $3`,
+                [durationSec, new Date(), id]
             );
 
             // Обновляем очередь
