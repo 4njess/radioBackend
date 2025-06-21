@@ -6,6 +6,8 @@ const dotenv = require("dotenv");
 const { v4: uuidv4 } = require("uuid");
 const axios = require("axios");
 const pool = require("./db.js");
+const NodeCache = require("node-cache");
+const stateCache = new NodeCache({ stdTTL: 0, checkperiod: 0 });
 
 dotenv.config();
 const app = express();
@@ -111,7 +113,8 @@ app.get("/health/routes", (req, res) => {
     res.json({ routes });
 });
 
-
+let pendingRequests = [];
+global.userNotifications = [];
 
 // Инициализация структур данных
 const queues = {
@@ -120,8 +123,11 @@ const queues = {
     electronic: { youtube: [], rutube: [] },
 };
 
-let pendingRequests = [];
-global.userNotifications = [];
+const timers = {
+    rock: { youtube: null, rutube: null },
+    hiphop: { youtube: null, rutube: null },
+    electronic: { youtube: null, rutube: null }
+};
 
 const currentTracks = {
     rock: { youtube: null, rutube: null },
@@ -145,27 +151,165 @@ function isTrackPlaying(t) {
     return (Date.now() - t.startedAt) / 1000 < t.durationSec;
 }
 
-function startNextTrack(genre, platform) {
-    const queueForPlatform = queues[genre][platform];
+// function startNextTrack(genre, platform) {
+//     const queueForPlatform = queues[genre][platform];
 
+//     if (queueForPlatform.length === 0) {
+//         currentTracks[genre][platform] = null;
+//         io.emit(`now-playing-${genre}-${platform}`, null);
+//         return;
+//     }
+
+//     const next = queueForPlatform.shift();
+//     currentTracks[genre][platform] = { ...next, startedAt: Date.now() };
+
+//     io.emit(`queue-update-${genre}-${platform}`, queueForPlatform);
+//     io.emit(`now-playing-${genre}-${platform}`, currentTracks[genre][platform]);
+
+//     setTimeout(() => startNextTrack(genre, platform), next.durationSec * 1000);
+// }
+
+// Обновляем функцию startNextTrack
+// function startNextTrack(genre, platform) {
+//     if (timers[genre][platform]) {
+//         clearTimeout(timers[genre][platform]);
+//         timers[genre][platform] = null;
+//     }
+
+
+//     const queueForPlatform = queues[genre][platform];
+
+//     if (queueForPlatform.length === 0) {
+//         currentTracks[genre][platform] = null;
+//         io.emit(`now-playing-${genre}-${platform}`, null);
+//         return;
+//     }
+
+//     const next = queueForPlatform.shift();
+//     const now = Date.now();
+    
+//     // Сохраняем предыдущий прогресс
+//     const prevTrack = currentTracks[genre][platform];
+//     let startOffset = 0;
+    
+//     if (prevTrack) {
+//         const elapsed = (now - prevTrack.startedAt) / 1000;
+//         if (elapsed < prevTrack.durationSec) {
+//             startOffset = elapsed;
+//         }
+//     }
+    
+//     currentTracks[genre][platform] = { 
+//         ...next, 
+//         startedAt: now - startOffset * 1000
+//     };
+
+//     io.emit(`queue-update-${genre}-${platform}`, queueForPlatform);
+//     io.emit(`now-playing-${genre}-${platform}`, currentTracks[genre][platform]);
+
+//     const remainingTime = next.durationSec * 1000 - startOffset * 1000;
+
+//     timers[genre][platform] = setTimeout(
+//         () => startNextTrack(genre, platform), 
+//         remainingTime
+//     );
+// }
+
+function startNextTrack(genre, platform) {
+    if (timers[genre][platform]) {
+        clearTimeout(timers[genre][platform]);
+        timers[genre][platform] = null;
+    }
+
+    const queueForPlatform = queues[genre][platform];
+    
     if (queueForPlatform.length === 0) {
         currentTracks[genre][platform] = null;
         io.emit(`now-playing-${genre}-${platform}`, null);
         return;
     }
 
-    const next = queueForPlatform.shift();
-    currentTracks[genre][platform] = { ...next, startedAt: Date.now() };
+    const next = queueForPlatform[0];
+    const now = Date.now();
+    
+    currentTracks[genre][platform] = { 
+        ...next, 
+        startedAt: now
+    };
 
-    io.emit(`queue-update-${genre}-${platform}`, queueForPlatform);
     io.emit(`now-playing-${genre}-${platform}`, currentTracks[genre][platform]);
 
-    setTimeout(() => startNextTrack(genre, platform), next.durationSec * 1000);
+    timers[genre][platform] = setTimeout(() => {
+        // Удаляем воспроизведенный трек из очереди
+        queues[genre][platform].shift();
+        io.emit(`queue-update-${genre}-${platform}`, queues[genre][platform]);
+        
+        // Запускаем следующий трек
+        startNextTrack(genre, platform);
+    }, next.durationSec * 1000);
 }
+
+// Функция сохранения состояния
+function saveServerState() {
+    const state = {
+        queues,
+        currentTracks,
+        currentPlatforms,
+        pendingRequests
+    };
+    stateCache.set("serverState", state);
+}
+
+// Функция восстановления состояния
+function loadServerState() {
+    const savedState = stateCache.get("serverState");
+    if (savedState) {
+        Object.assign(queues, savedState.queues);
+        Object.assign(currentTracks, savedState.currentTracks);
+        Object.assign(currentPlatforms, savedState.currentPlatforms);
+        pendingRequests = savedState.pendingRequests;
+        
+        // Перезапускаем таймеры
+        for (const genre of Object.keys(currentTracks)) {
+            for (const platform of ["youtube", "rutube"]) {
+                const track = currentTracks[genre][platform];
+                if (track && track.startedAt) {
+                    const elapsed = (Date.now() - track.startedAt) / 1000;
+                    const remaining = track.durationSec - elapsed;
+                    if (remaining > 0) {
+                        if (timers[genre][platform]) {
+                            clearTimeout(timers[genre][platform]);
+                        }
+                        
+                        timers[genre][platform] = setTimeout(
+                            () => startNextTrack(genre, platform), 
+                            remaining * 1000
+                        );
+                    } else {
+                        startNextTrack(genre, platform);
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 
 io.on("connection", (socket) => {
     console.log("🔌 Новый клиент");
+    loadServerState();
+
+    const saveState = () => {
+        saveServerState();
+        // Отправляем актуальное состояние новому клиенту
+        for (const genre of Object.keys(currentTracks)) {
+            for (const platform of ["youtube", "rutube"]) {
+                socket.emit(`queue-update-${genre}-${platform}`, queues[genre][platform]);
+                socket.emit(`now-playing-${genre}-${platform}`, currentTracks[genre][platform]);
+            }
+        }
+    };
 
     socket.on("get-moderation-queue", () => {
         socket.emit("moderation-queue", pendingRequests);
@@ -207,26 +351,50 @@ io.on("connection", (socket) => {
         }
     });
 
-    // Обработчик смены платформы
     socket.on("change-platform", ({ genre, platform }) => {
-        currentPlatforms[genre] = platform;
-
-        // Если текущий трек не соответствует платформе - останавливаем
-        if (
-            currentTracks[genre][platform] &&
-            currentTracks[genre][platform].platform !== platform
-        ) {
-            currentTracks[genre][platform] = null;
-            io.emit(`now-playing-${genre}-${platform}`, null);
+        saveState();
+        
+        const prevPlatform = currentPlatforms[genre];
+        
+        // Останавливаем таймер на предыдущей платформе
+        if (timers[genre][prevPlatform]) {
+            clearTimeout(timers[genre][prevPlatform]);
+            timers[genre][prevPlatform] = null;
         }
-
-        // Запускаем следующий трек, если очередь не пуста
-        if (queues[genre][platform].length) {
+        
+        // Переключаем платформу
+        currentPlatforms[genre] = platform;
+        
+        // Проверяем состояние на новой платформе
+        const currentTrack = currentTracks[genre][platform];
+        const queue = queues[genre][platform];
+        
+        // Если есть активный трек - перезапускаем таймер
+        if (currentTrack && isTrackPlaying(currentTrack)) {
+            const elapsed = (Date.now() - currentTrack.startedAt) / 1000;
+            const remaining = currentTrack.durationSec - elapsed;
+            
+            if (remaining > 0) {
+                timers[genre][platform] = setTimeout(
+                    () => startNextTrack(genre, platform), 
+                    remaining * 1000
+                );
+            } else {
+                startNextTrack(genre, platform);
+            }
+        }
+        // Если нет активного трека, но есть очередь - запускаем следующий
+        else if (queue.length > 0) {
             startNextTrack(genre, platform);
         }
+        
+        // Отправляем обновленное состояние
+        io.emit(`now-playing-${genre}-${platform}`, currentTracks[genre][platform]);
+        io.emit(`queue-update-${genre}-${platform}`, queue);
     });
 
     socket.on("new-request", ({ genre, request, platform }) => {
+        saveState();
         pendingRequests.push({
             ...request,
             id: uuidv4(),
@@ -243,7 +411,24 @@ io.on("connection", (socket) => {
         });
     });
 
+    socket.on("sync-platform", ({ genre, platform }) => {
+        const currentTrack = currentTracks[genre][platform];
+        
+        // Если трек играет - отправляем его текущее состояние
+        if (currentTrack && isTrackPlaying(currentTrack)) {
+            socket.emit(`now-playing-${genre}-${platform}`, currentTrack);
+        }
+        // Иначе отправляем null
+        else {
+            socket.emit(`now-playing-${genre}-${platform}`, null);
+        }
+        
+        // Всегда отправляем актуальную очередь
+        socket.emit(`queue-update-${genre}-${platform}`, queues[genre][platform]);
+    });
+
     socket.on("moderate-request", async ({ id, action, reason }) => {
+        saveState();
         const idx = pendingRequests.findIndex((r) => r.id === id);
         if (idx === -1) return;
         const reqObj = pendingRequests.splice(idx, 1)[0];
