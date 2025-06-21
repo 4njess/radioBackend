@@ -228,23 +228,25 @@ function startNextTrack(genre, platform) {
         io.emit(`now-playing-${genre}-${platform}`, null);
         return;
     }
+    const next = queueForPlatform.shift();
 
-    const next = queueForPlatform[0];
     const now = Date.now();
-    
-    currentTracks[genre][platform] = { 
-        ...next, 
+    currentTracks[genre][platform] = {
+        ...next,
         startedAt: now
     };
 
+    // сразу же отдаем обновлённую очередь
+    io.emit(`queue-update-${genre}-${platform}`, queueForPlatform);
+    // и текущий трек
     io.emit(`now-playing-${genre}-${platform}`, currentTracks[genre][platform]);
 
+    // сохраняем состояние, чтобы при рестарте старый трек не «вернулся»
+    saveServerState();
+
+    // планируем переход на следующий
     timers[genre][platform] = setTimeout(() => {
-        // Удаляем воспроизведенный трек из очереди
-        queues[genre][platform].shift();
-        io.emit(`queue-update-${genre}-${platform}`, queues[genre][platform]);
-        
-        // Запускаем следующий трек
+        // после проигрывания автоматически запустим следующий
         startNextTrack(genre, platform);
     }, next.durationSec * 1000);
 }
