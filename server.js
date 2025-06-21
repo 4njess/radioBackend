@@ -460,6 +460,23 @@ io.on("connection", (socket) => {
                     );
                 }
             }
+        if (platform === "rutube") {
+            try {
+                // Этот endpoint отдаёт JSON с полем video_duration (в секундах)
+                const rutId = new URL(track).pathname.split("/").pop();
+                const info = await axios.get(
+                    `https://rutube.ru/api/video/${rutId}/?format=json`
+                );
+                // В API ключ video_duration может быть либо в info.data.duration, либо в info.data.video_duration
+                durationSec =
+                    parseInt(info.data.video_duration || info.data.duration, 10) ||
+                    durationSec;
+            } catch (e) {
+                console.warn("RuTube duration fetch failed, using default");
+            }
+        }
+
+            
             durationSec = durationSec || 180;
 
             const enriched = { ...reqObj, durationSec };
