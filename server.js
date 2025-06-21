@@ -470,24 +470,70 @@ io.on("connection", (socket) => {
             }
             if (platform === "rutube") {
                 try {
-                    // Этот endpoint отдаёт JSON с полем video_duration (в секундах)
-                    const rutId = new URL(track).pathname.split("/").pop();
-                    const info = await axios.get(
-                        `https://rutube.ru/api/video/${rutId}/?format=json`
+                    // 1) Получаем rutId
+                    const parsed = new URL(track);
+                    const segments = parsed.pathname.split("/").filter(Boolean);
+                    const rutId = segments[segments.length - 1];
+                    if (!rutId) throw new Error("Invalid RuTube ID");
+
+                    // 2) Берём master-playlist URL
+                    const optsRes = await axios.get(
+                        `https://rutube.ru/api/play/options/${rutId}/`,
+                        {
+                            headers: {
+                                Referer: `https://rutube.ru/video/${rutId}/`,
+                                Origin: "https://rutube.ru",
+                            },
+                        }
                     );
-                    console.log("RuTube metadata:", info.data);
-                    // В API ключ video_duration может быть либо в info.data.duration, либо в info.data.video_duration
-                    if (info.data.duration) {
-                        durationSec = Number(info.data.duration);
-                    } else if (info.data.video_duration) {
-                        durationSec = Number(info.data.video_duration);
-                    } else {
-                        console.warn(
-                            "Не нашли поле длительности, fallback на default"
-                        );
+                    const masterUrl = optsRes.data.video_balancer?.m3u8;
+                    if (!masterUrl) throw new Error("No m3u8 URL");
+
+                    // 3) Скачиваем master-playlist
+                    const masterRes = await axios.get(masterUrl, {
+                        responseType: "text",
+                    });
+                    const lines = masterRes.data.split("\n");
+
+                    // 4) Ищем первую variant
+                    let variantLine;
+                    for (let i = 0; i < lines.length; i++) {
+                        if (lines[i].startsWith("#EXT-X-STREAM-INF:")) {
+                            variantLine = lines[i + 1];
+                            break;
+                        }
                     }
-                } catch (e) {
-                    console.warn("RuTube duration fetch failed, using default");
+                    if (!variantLine) throw new Error("No variant found");
+
+                    // 5) Формируем абсолютный URL variant
+                    const masterBase = new URL(masterUrl);
+                    const variantUrl = new URL(variantLine, masterBase).href;
+
+                    console.log("Using variant playlist:", variantUrl);
+
+                    // 6) Скачиваем variant-playlist и парсим #EXTINF
+                    const variantRes = await axios.get(variantUrl, {
+                        responseType: "text",
+                    });
+                    const parsedDuration = variantRes.data
+                        .split("\n")
+                        .filter((l) => l.startsWith("#EXTINF:"))
+                        .map((l) => parseFloat(l.slice(8).split(",")[0]))
+                        .reduce((sum, seg) => sum + seg, 0);
+
+                    if (!parsedDuration || isNaN(parsedDuration)) {
+                        console.warn("EXTINF parse failed, fallback 180s");
+                        durationSec = 180;
+                    } else {
+                        durationSec = Math.floor(parsedDuration);
+                        console.log(`Parsed RuTube duration: ${durationSec}s`);
+                    }
+                } catch (err) {
+                    console.warn(
+                        "Ошибка подсчёта длительности RuTube, fallback 180s",
+                        err.message
+                    );
+                    durationSec = 180;
                 }
             }
 
