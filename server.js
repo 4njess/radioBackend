@@ -315,8 +315,17 @@ io.on("connection", (socket) => {
         }
     };
 
-    socket.on("get-moderation-queue", () => {
-        socket.emit("moderation-queue", pendingRequests);
+    socket.on("get-moderation-queue", async () => {
+        // вытаскиваем все заявки со статусом "sent"
+        const { rows } = await pool.query(
+            `SELECT id, genre, track, username, message, title, user_id AS "userId", platform
+                FROM requests
+                WHERE status = 'sent'
+                ORDER BY timestamp`
+        );
+        // синхронизируем память
+        pendingRequests = rows;
+        socket.emit("moderation-queue", rows);
     });
 
     socket.on("register-user", (userId) => {
@@ -400,21 +409,47 @@ io.on("connection", (socket) => {
         io.emit(`queue-update-${genre}-${platform}`, queue);
     });
 
-    socket.on("new-request", ({ genre, request, platform }) => {
-        saveState();
+    socket.on("new-request", async ({ genre, request, platform }) => {
+        const id = uuidv4();
+        const timestamp = new Date();
+
+        // 1. Записываем в память
         pendingRequests.push({
             ...request,
-            id: uuidv4(),
+            id,
             genre,
             platform,
             status: "sent",
-            timestamp: new Date(),
+            timestamp,
         });
+
+        // 2. Сразу сохраняем в БД
+        await pool.query(
+            `INSERT INTO requests
+        (id, genre, track, username, message, title, status, timestamp, user_id, platform)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+            [
+                id,
+                genre,
+                request.track,
+                request.username,
+                request.message,
+                request.title,
+                "sent",
+                timestamp,
+                request.userId,
+                platform,
+            ]
+        );
+
+        // 3. Рассылаем всем админам актуальный пул
         io.emit("moderation-queue", pendingRequests);
+
+        // 4. Оповещение про cooldown
         io.emit(`cooldown-update-${genre}`, {
             userId: request.userId,
             genre,
-            until: Date.now() + 60 * 1000, // 5 минут
+            until: Date.now() + 60 * 1000,
         });
     });
 
@@ -599,7 +634,20 @@ io.on("connection", (socket) => {
             io.to(userId).emit("new-notification", notif);
         }
 
-        io.emit("moderation-queue", pendingRequests);
+        await pool.query(`UPDATE requests SET status = $1 WHERE id = $2`, [
+            action === "approve" ? "approved" : "rejected",
+            id,
+        ]);
+
+        const { rows: updated } = await pool.query(
+            `SELECT id, genre, track, username, message, title, user_id AS "userId", platform
+                FROM requests
+                WHERE status = 'sent'
+                ORDER BY timestamp`
+        );
+
+        pendingRequests = updated;
+        io.emit("moderation-queue", updated);
     });
 
     socket.on("disconnect", () => console.log("❌ Клиент отключён"));
