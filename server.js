@@ -87,7 +87,6 @@ const io = new Server(server, {
 app.use(express.json());
 app.use("/api", require("./routes/apiRoute.js"));
 
-
 app.get("/health/routes", (req, res) => {
     const routes = [];
     app._router.stack.forEach((middleware) => {
@@ -126,7 +125,7 @@ const queues = {
 const timers = {
     rock: { youtube: null, rutube: null },
     hiphop: { youtube: null, rutube: null },
-    electronic: { youtube: null, rutube: null }
+    electronic: { youtube: null, rutube: null },
 };
 
 const currentTracks = {
@@ -176,7 +175,6 @@ function isTrackPlaying(t) {
 //         timers[genre][platform] = null;
 //     }
 
-
 //     const queueForPlatform = queues[genre][platform];
 
 //     if (queueForPlatform.length === 0) {
@@ -187,20 +185,20 @@ function isTrackPlaying(t) {
 
 //     const next = queueForPlatform.shift();
 //     const now = Date.now();
-    
+
 //     // Сохраняем предыдущий прогресс
 //     const prevTrack = currentTracks[genre][platform];
 //     let startOffset = 0;
-    
+
 //     if (prevTrack) {
 //         const elapsed = (now - prevTrack.startedAt) / 1000;
 //         if (elapsed < prevTrack.durationSec) {
 //             startOffset = elapsed;
 //         }
 //     }
-    
-//     currentTracks[genre][platform] = { 
-//         ...next, 
+
+//     currentTracks[genre][platform] = {
+//         ...next,
 //         startedAt: now - startOffset * 1000
 //     };
 
@@ -210,7 +208,7 @@ function isTrackPlaying(t) {
 //     const remainingTime = next.durationSec * 1000 - startOffset * 1000;
 
 //     timers[genre][platform] = setTimeout(
-//         () => startNextTrack(genre, platform), 
+//         () => startNextTrack(genre, platform),
 //         remainingTime
 //     );
 // }
@@ -222,7 +220,7 @@ function startNextTrack(genre, platform) {
     }
 
     const queueForPlatform = queues[genre][platform];
-    
+
     if (queueForPlatform.length === 0) {
         currentTracks[genre][platform] = null;
         io.emit(`now-playing-${genre}-${platform}`, null);
@@ -233,7 +231,7 @@ function startNextTrack(genre, platform) {
     const now = Date.now();
     currentTracks[genre][platform] = {
         ...next,
-        startedAt: now
+        startedAt: now,
     };
 
     // сразу же отдаем обновлённую очередь
@@ -257,7 +255,7 @@ function saveServerState() {
         queues,
         currentTracks,
         currentPlatforms,
-        pendingRequests
+        pendingRequests,
     };
     stateCache.set("serverState", state);
 }
@@ -270,7 +268,7 @@ function loadServerState() {
         Object.assign(currentTracks, savedState.currentTracks);
         Object.assign(currentPlatforms, savedState.currentPlatforms);
         pendingRequests = savedState.pendingRequests;
-        
+
         // Перезапускаем таймеры
         for (const genre of Object.keys(currentTracks)) {
             for (const platform of ["youtube", "rutube"]) {
@@ -282,9 +280,9 @@ function loadServerState() {
                         if (timers[genre][platform]) {
                             clearTimeout(timers[genre][platform]);
                         }
-                        
+
                         timers[genre][platform] = setTimeout(
-                            () => startNextTrack(genre, platform), 
+                            () => startNextTrack(genre, platform),
                             remaining * 1000
                         );
                     } else {
@@ -296,8 +294,6 @@ function loadServerState() {
     }
 }
 
-
-
 io.on("connection", (socket) => {
     console.log("🔌 Новый клиент");
     loadServerState();
@@ -307,8 +303,14 @@ io.on("connection", (socket) => {
         // Отправляем актуальное состояние новому клиенту
         for (const genre of Object.keys(currentTracks)) {
             for (const platform of ["youtube", "rutube"]) {
-                socket.emit(`queue-update-${genre}-${platform}`, queues[genre][platform]);
-                socket.emit(`now-playing-${genre}-${platform}`, currentTracks[genre][platform]);
+                socket.emit(
+                    `queue-update-${genre}-${platform}`,
+                    queues[genre][platform]
+                );
+                socket.emit(
+                    `now-playing-${genre}-${platform}`,
+                    currentTracks[genre][platform]
+                );
             }
         }
     };
@@ -355,30 +357,30 @@ io.on("connection", (socket) => {
 
     socket.on("change-platform", ({ genre, platform }) => {
         saveState();
-        
+
         const prevPlatform = currentPlatforms[genre];
-        
+
         // Останавливаем таймер на предыдущей платформе
         if (timers[genre][prevPlatform]) {
             clearTimeout(timers[genre][prevPlatform]);
             timers[genre][prevPlatform] = null;
         }
-        
+
         // Переключаем платформу
         currentPlatforms[genre] = platform;
-        
+
         // Проверяем состояние на новой платформе
         const currentTrack = currentTracks[genre][platform];
         const queue = queues[genre][platform];
-        
+
         // Если есть активный трек - перезапускаем таймер
         if (currentTrack && isTrackPlaying(currentTrack)) {
             const elapsed = (Date.now() - currentTrack.startedAt) / 1000;
             const remaining = currentTrack.durationSec - elapsed;
-            
+
             if (remaining > 0) {
                 timers[genre][platform] = setTimeout(
-                    () => startNextTrack(genre, platform), 
+                    () => startNextTrack(genre, platform),
                     remaining * 1000
                 );
             } else {
@@ -389,9 +391,12 @@ io.on("connection", (socket) => {
         else if (queue.length > 0) {
             startNextTrack(genre, platform);
         }
-        
+
         // Отправляем обновленное состояние
-        io.emit(`now-playing-${genre}-${platform}`, currentTracks[genre][platform]);
+        io.emit(
+            `now-playing-${genre}-${platform}`,
+            currentTracks[genre][platform]
+        );
         io.emit(`queue-update-${genre}-${platform}`, queue);
     });
 
@@ -415,7 +420,7 @@ io.on("connection", (socket) => {
 
     socket.on("sync-platform", ({ genre, platform }) => {
         const currentTrack = currentTracks[genre][platform];
-        
+
         // Если трек играет - отправляем его текущее состояние
         if (currentTrack && isTrackPlaying(currentTrack)) {
             socket.emit(`now-playing-${genre}-${platform}`, currentTrack);
@@ -424,9 +429,12 @@ io.on("connection", (socket) => {
         else {
             socket.emit(`now-playing-${genre}-${platform}`, null);
         }
-        
+
         // Всегда отправляем актуальную очередь
-        socket.emit(`queue-update-${genre}-${platform}`, queues[genre][platform]);
+        socket.emit(
+            `queue-update-${genre}-${platform}`,
+            queues[genre][platform]
+        );
     });
 
     socket.on("moderate-request", async ({ id, action, reason }) => {
@@ -460,23 +468,29 @@ io.on("connection", (socket) => {
                     );
                 }
             }
-        if (platform === "rutube") {
-            try {
-                // Этот endpoint отдаёт JSON с полем video_duration (в секундах)
-                const rutId = new URL(track).pathname.split("/").pop();
-                const info = await axios.get(
-                    `https://rutube.ru/api/video/${rutId}/?format=json`
-                );
-                // В API ключ video_duration может быть либо в info.data.duration, либо в info.data.video_duration
-                durationSec =
-                    parseInt(info.data.video_duration || info.data.duration, 10) ||
-                    durationSec;
-            } catch (e) {
-                console.warn("RuTube duration fetch failed, using default");
+            if (platform === "rutube") {
+                try {
+                    // Этот endpoint отдаёт JSON с полем video_duration (в секундах)
+                    const rutId = new URL(track).pathname.split("/").pop();
+                    const info = await axios.get(
+                        `https://rutube.ru/api/video/${rutId}/?format=json`
+                    );
+                    console.log("RuTube metadata:", info.data);
+                    // В API ключ video_duration может быть либо в info.data.duration, либо в info.data.video_duration
+                    if (info.data.duration) {
+                        durationSec = Number(info.data.duration);
+                    } else if (info.data.video_duration) {
+                        durationSec = Number(info.data.video_duration);
+                    } else {
+                        console.warn(
+                            "Не нашли поле длительности, fallback на default"
+                        );
+                    }
+                } catch (e) {
+                    console.warn("RuTube duration fetch failed, using default");
+                }
             }
-        }
 
-            
             durationSec = durationSec || 180;
 
             const enriched = { ...reqObj, durationSec };
