@@ -491,7 +491,7 @@ io.on("connection", (socket) => {
                 }
             }
 
-            durationSec = durationSec || 180;
+            durationSec = Number(info.data.video_duration);
 
             const enriched = { ...reqObj, durationSec };
 
