@@ -21,7 +21,8 @@ const allowedOrigins = [
     "https://radiobackend-iss7.onrender.com",
     "https://4njess-radiobackend-f6cd.twc1.net",
     "4njess-radiobackend-f6cd.twc1.net",
-    "http://4njess-radiobackend-f6cd.twc1.net"
+    "http://4njess-radiobackend-f6cd.twc1.net",
+    "https://4njess-radiobackend-9008.twc1.net"
 ];
 
 // Логирование запросов для диагностики
