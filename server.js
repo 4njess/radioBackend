@@ -20,7 +20,8 @@ const allowedOrigins = [
     "https://radioclient-gacetihnu-linear-80e9e17cvercel.app",
     "https://radiobackend-iss7.onrender.com",
     "https://4njess-radiobackend-f6cd.twc1.net",
-    "4njess-radiobackend-f6cd.twc1.net"
+    "4njess-radiobackend-f6cd.twc1.net",
+    "http://4njess-radiobackend-f6cd.twc1.net"
 ];
 
 // Логирование запросов для диагностики
